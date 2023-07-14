@@ -25,6 +25,7 @@ library(broom)
 library(huxtable)
 library(ggplot2)
 library(ggbeeswarm)
+library(forcats)
 library(wesanderson)
 ```
 
@@ -176,37 +177,29 @@ theme_update(
 
 # Hypotheses
 
-## Negative/Positive Prime
+## Confidence
 
--   H1:
+-   H1: There will be a negative correlation between confidence and BSFC Score
 
-    -   Plan:
+-   H2: There will be a positive correlation between confidence and PAOC Score
 
--   H2:
+## Priming: Negative vs. Positive
 
-    -   Plan:
+-   H3: There will be a main effect of priming on BSFC Score
 
--   H3:
+-   H4: There will be a main effect of priming on PAOC Score
 
-    -   Plan:
+## Support
 
--   H4:
+-   H5: There will be a negative correlation between support and BSFC Score
 
-    -   Plan:
-
--   H5:
-
-    -   Plan:
-
--   H6:
-
-    -   Plan:
+-   H6: There will be a positive correlation between support and PAOC Score
 
 ### Data Cleaning
 
 ```{r}
 # Read in file
-cg <- read.csv("/Users/davidbrocker/Documents/GitHub/BrockerAnderson_Collab/Data/data.csv")
+cg <- read.csv(file.choose())
 
 # Clean Data
 cg_cln <- 
@@ -231,7 +224,7 @@ cg_cln <-
   clean_names()
 ```
 
-### Correlations
+### Correlations: Years as Caregiver
 
 #### Years as Caregiver x Positive Aspects of Caregiving
 
@@ -248,7 +241,9 @@ cor.test(cg_cln$years_as_cg, cg_cln$bsfc) |>
 hux_corr()
 ```
 
-#### Level of Confidence x Positive Aspects of Caregiving
+### Correlations: Confidence in Health Condition
+
+#### H1. Level of Confidence x Positive Aspects of Caregiving
 
 ```{r}
 # Confidence x PAOC
@@ -258,7 +253,7 @@ cor.test(cg_cln$confidence, cg_cln$paoc) |>
 cg_cln |> 
   ggplot(aes(confidence, paoc)) + 
   geom_point() +
-  xlim(0,7) +
+  xlim(1,5) +
   ylim(0,50) +
   geom_smooth(method = "lm", se = FALSE) + 
   labs(x = "\nConfidence",
@@ -272,7 +267,7 @@ cg_cln |>
   )
 ```
 
-#### Level of Confidence x Burden Scale for Family Caregivers
+#### H2. Level of Confidence x Burden Scale for Family Caregivers
 
 ```{r}
 # Confidence x BSFC
@@ -283,21 +278,18 @@ hux_corr()
 cg_cln |> 
   ggplot(aes(confidence, bsfc)) + 
   geom_point() +
-  xlim(0,7) +
-  ylim(0,30) +
+  xlim(1,5) +
+  ylim(0,40) +
   geom_smooth(method = "lm", se = FALSE) + 
   labs(x = "\nConfidence",
-       y = "Positive Aspects of Caregiving\n",
-       caption = "Figure 4. Confidence does not predict score on BSFC") + 
+       y = "Positive Aspects of Caregiving\n") +
   theme(
     panel.grid = element_blank(),
-    axis.text = element_text(color = "black"),
-    plot.caption = element_text(face = "italic",
-                                hjust = .5)
+    axis.text = element_text(color = "black")
   )
 ```
 
-### Level of Support
+### Correlations: Support
 
 ```{r}
 # Make Support a 3 Level Factor
@@ -313,22 +305,25 @@ support <-
   select(support,bsfc,paoc)
 ```
 
-#### Support and PAOC
+#### H5: Support and PAOC
 
 ```{r}
 # Level of Support and PAOC Score
-aov(support$paoc~support$support) |> 
+lm(support$paoc~support$support) |> 
   # Use aov_car to clean up
-  summary()
+  summary() |> 
+  huxreg()
+
 ```
 
-#### Support and BSFC
+#### H6: Support and BSFC
 
 ```{r}
 # Level of Support and BSFC Score
-aov(support$bsfc~support$support) |> 
+lm(support$bsfc~support$support) |> 
   # Use aov_car to clean up
-  summary()
+  summary() |> 
+  huxreg()
 ```
 
 #### Figures
@@ -373,7 +368,7 @@ support |>
 
 ### Priming Negative vs Positive
 
-#### Priming and BSFC
+#### H3: Priming and BSFC
 
 ```{r}
 pr_bsfc <- 
@@ -386,7 +381,7 @@ pr_bsfc$grp2[1] <- "Positive"
 pr_bsfc
 ```
 
-#### Priming and PAOC
+#### H4: Priming and PAOC
 
 ```{r}
 pr_paoc <- 
@@ -397,4 +392,22 @@ pr_paoc$grp1[1] <- "Negative"
 pr_paoc$grp2[1] <- "Positive"
 
 pr_paoc
+```
+
+### Healthy Days
+
+```{r}
+cg_cln |> 
+  select(condition,starts_with("hd")) |> 
+  group_by(condition) |> 
+  mutate(condition = ifelse(condition == "1", "Positive","Negative")) |> 
+  summarise_all(sum) |> 
+  tidyr::pivot_longer(cols=starts_with("hd"), 
+                      names_to = "HealthyDays",
+                      values_to = "Score") |> 
+  ggplot(aes(fct_reorder(HealthyDays,Score),Score,fill=condition)) +
+  geom_bar(stat = "identity")+
+  coord_flip() +
+  facet_wrap(~condition)
+  
 ```
