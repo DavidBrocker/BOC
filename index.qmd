@@ -27,6 +27,9 @@ library(ggplot2)
 library(ggbeeswarm)
 library(forcats)
 library(wesanderson)
+library(skimr)
+library(stringr)
+library(stringi)
 ```
 
 ```{r}
@@ -199,7 +202,7 @@ theme_update(
 
 ```{r}
 # Read in file
-cg <- read.csv(file.choose())
+cg <- read.csv("Data Analysis Caregiver Study.xlsx - Correlations.csv")
 
 # Clean Data
 cg_cln <- 
@@ -210,9 +213,9 @@ cg_cln <-
     years_as_cg = X..years.as.caregiver,
     support = Support..Do.you.feel.like.you.have.adequate.support.from.others.in.your.life..0...no..1...somewhat..2...yes,
     confidence = confidence.1.not.confident.5.very.confident,
-    hd_gen = hd_genWould.you.say.that.in.general.your.health.is...,
-    hd_phys = hd_physHow.many.days.during.the.past.30.days.was.your.physical.health.not.good.,
-    hd_men = hd_menHow.many.days.during.the.past.30.days.was.your.mental.health.not.good.,
+    hd_general = hd_genWould.you.say.that.in.general.your.health.is...,
+    hd_physical = hd_physHow.many.days.during.the.past.30.days.was.your.physical.health.not.good.,
+    hd_mental = hd_menHow.many.days.during.the.past.30.days.was.your.mental.health.not.good.,
     hd_usual = hd_usualDuring.the.past.30.days..for.about.how.many.days.did.poor.physical.or.mental.health.keep.you.from.doing.your.usual.activities..such.as.self.care..work..or.recreation.,
     hd_pain = hd_painDuring.the.past.30.days..for.about.how.many.days.did.PAIN.make.it.hard.for.you.to.do.your.usual.activities..such.as.selfcare..work..or.recreation.,
     hd_sad = hd_sadDuring.the.past.30.days..for.about.how.many.days.have.you.felt.SAD..BLUE..or.DEPRESSED.,
@@ -257,13 +260,10 @@ cg_cln |>
   ylim(0,50) +
   geom_smooth(method = "lm", se = FALSE) + 
   labs(x = "\nConfidence",
-       y = "Positive Aspects of Caregiving\n",
-       caption = "Figure 3. Confidence predicts score on PAOC") + 
+       y = "Positive Aspects of Caregiving\n") + 
   theme(
     panel.grid = element_blank(),
-    axis.text = element_text(color = "black"),
-    plot.caption = element_text(face = "italic",
-                                hjust = .5)
+    axis.text = element_text(color = "black")
   )
 ```
 
@@ -309,10 +309,7 @@ support <-
 
 ```{r}
 # Level of Support and PAOC Score
-lm(support$paoc~support$support) |> 
-  # Use aov_car to clean up
-  summary() |> 
-  huxreg()
+sup_p.mod <- lm(support$paoc~support$support) |> summary()
 
 ```
 
@@ -320,10 +317,17 @@ lm(support$paoc~support$support) |>
 
 ```{r}
 # Level of Support and BSFC Score
-lm(support$bsfc~support$support) |> 
-  # Use aov_car to clean up
-  summary() |> 
-  huxreg()
+sup_b.mod <- lm(support$bsfc~support$support) |> summary() 
+
+all_mods <- 
+  huxreg(PAOC = sup_p.mod,
+       BSFC = sup_b.mod,
+       error_pos = "right",
+       statistics = character())
+
+all_mods$names[2:4] <- c("No Support","Some Support","Support")
+
+all_mods
 ```
 
 #### Figures
@@ -400,14 +404,61 @@ pr_paoc
 cg_cln |> 
   select(condition,starts_with("hd")) |> 
   group_by(condition) |> 
-  mutate(condition = ifelse(condition == "1", "Positive","Negative")) |> 
-  summarise_all(sum) |> 
+  mutate(condition = ifelse(condition == "1", "Positive","Negative")) |>
+  select(-hd_general,-hd_usual,hd_usual) |> 
   tidyr::pivot_longer(cols=starts_with("hd"), 
                       names_to = "HealthyDays",
                       values_to = "Score") |> 
-  ggplot(aes(fct_reorder(HealthyDays,Score),Score,fill=condition)) +
-  geom_bar(stat = "identity")+
+  mutate(HealthyDays = str_remove_all(HealthyDays, "hd_"),
+         HealthyDays = str_to_title(HealthyDays)) |> 
+  ggplot(aes(fct_reorder(HealthyDays,Score),Score,
+             color=condition)) +
+  stat_summary(fun.data = "mean_se",
+               geom = "pointrange",
+               fun.y = "Score")+
   coord_flip() +
-  facet_wrap(~condition)
+  facet_wrap(~condition) +
+  labs(
+    x = "Score\n",
+    y = "\nCondition",
+    caption = "All responses have a range of 30 and are all phrased in a negative connotation. \nExample: For how many days have you felt SAD, BLUE, or DEPRESSED"
+  ) +
+  theme(
+    legend.position = "blank",
+    plot.caption = element_text(face = "italic",
+                                hjust = .5)
+  )
   
+```
+
+### Descriptives
+
+```{r}
+cg_cln |> 
+  select(-gender) |> 
+  cont_skim()
+```
+
+### Demographics
+
+```{r}
+raw <- read.csv("Raw Data.csv") |> clean_names()
+
+demo <- 
+  raw |> 
+  select(gender_1_male_2_female,
+         eth_1_white) |> 
+  rename(
+    gender = gender_1_male_2_female,
+    ethnicity = eth_1_white
+  )
+
+gen_lab <- c("Man",'Woman')
+eth_lab <- c("White/Caucasian","Black","Multiple Ethnicities or other")
+
+gens <- discrete_tab(demo,"gender",gen_lab)
+
+eths <- discrete_tab(demo,"ethnicity",eth_lab)
+
+gens |> add_rows(eths)
 ```
